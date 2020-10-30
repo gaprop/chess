@@ -2,8 +2,7 @@ module Chess.Control where
 import Chess
 import Data.Array
 import Data.List
-
---movePiece :: Board -> Piece -> Board
+import Data.Maybe
 
 isBetween :: Ord a => (a, a) -> a -> Bool
 isBetween (min, max) a = min <= a && a <= max
@@ -12,22 +11,46 @@ isInBound :: (Position, Position) -> Position -> Bool
 isInBound (min, max) pos = isBetween (fst min, fst max) (fst pos) && 
                            isBetween (snd min, snd max) (snd pos)
 
-validMovesAt :: Board -> Position -> Maybe [Position]
+isEmptyCell :: Board -> Position -> Bool
+isEmptyCell b pos = (\(Cell x) -> isNothing x) . cellAt b $ pos
+
+isFriendly :: Board -> Piece -> Position -> Bool
+isFriendly board piece pos = 
+  let (Cell cell) = cellAt board pos
+   in case piece of
+        White _ -> case cell of 
+                     Just (White _) -> True
+                     Just (Black _) -> False
+                     Nothing        -> False
+        Black _ -> case cell of
+                     Just (White _) -> False
+                     Just (Black _) -> True
+                     Nothing        -> False
+        
+validMovesAt :: Board -> Position -> [Position]
 validMovesAt b@(Board board) (x, y) =
   let (Cell c) = cellAt b (x, y)
    in case c of
-        Nothing -> Nothing
-        Just (Black piece) -> staticPos (+) piece
-        Just (White piece) -> staticPos (-) piece
+        Nothing    -> []
+        Just piece -> staticPos piece
   where 
-        staticPos :: (Int -> Int -> Int) -> Figure -> Maybe [Position]
-        staticPos f = Just . sort . nub . foldr1 (++) . map validPos . map (relToStatPos f) . movesFor
+        staticPos :: Piece -> [Position]
+        staticPos p = sort . foldr1 (++) . map (validPos p . relToStatPos p) . movesFor . figure $ p
 
-        relToStatPos :: (Int -> Int -> Int) -> [Position] -> [Position]
-        relToStatPos f = map (\(x', y') -> (f x x', f y y'))
+        figure :: Piece -> Figure 
+        figure (White p) = p
+        figure (Black p) = p
 
-        validPos :: [Position] -> [Position]
-        validPos = takeWhile $ isInBound ((0, 0), (size, size))
+        relToStatPos :: Piece -> [Position] -> [Position]
+        relToStatPos (White piece) = map (\(x', y') -> (x - x', y - y'))
+        relToStatPos (Black piece) = map (\(x', y') -> (x + x', y + y'))
+
+        validPos :: Piece -> [Position] -> [Position]
+        validPos p = filter (not . isFriendly b p) . takeUntil (isEmptyCell b) . inBoundPos
+
+        inBoundPos :: [Position] -> [Position]
+        inBoundPos = takeWhile $ isInBound ((0, 0), (size, size))
+
 
 cellAt :: Board -> Position -> Cell
 cellAt (Board b) (x, y) = 
@@ -39,22 +62,21 @@ move b@(Board board) from to =
   let cell = cellAt b from
    in Board $ insert2d board [(from, Cell Nothing), (to, cell)]
 
--- Returns a list of lists. If the piece can not move to some infinity, then there is only one list.
--- Otherwise, it will have a list that goes to infinity in the directions that the piece can move.
--- For instance rook can move forward, backward, sideways infinity.
+-- Returns a list of lists. Each list is a directio that the piece can move.
+-- For instance rook can move forward, backward, sideways infinitly.
 movesFor :: Figure -> [[Position]]
-movesFor Pawn = [[(0, 1), (0, 2), (1, 1), (-1, 1)]]
-movesFor Knight = [[(1, 2), (2, 1), (2, -1), (1, -2), (-1, -2), (-2, -1), (-2, 1), (-1, 2)]]
-movesFor King = [(,) <$> [-1, 0, 1] <*> [-1, 0, 1]]
+movesFor Pawn = [[(0, 1)], [(0, 2)], [(1, 1)], [(-1, 1)]]
+movesFor Knight = [[(1, 2)], [(2, 1)], [(2, -1)], [(1, -2)], [(-1, -2)], [(-2, -1)], [(-2, 1)], [(-1, 2)]]
+movesFor King = map (: []) . filter (\pos -> pos /= (0, 0)) $ (,) <$> [-1, 0, 1] <*> [-1, 0, 1]
 -- These are the pieces that can move in some infinite direction.
-movesFor Rook = [ map ((,) 0) [0..]           -- North direction
-                , map (flip (,) 0) [0..]      -- East direction
-                , map ((,) 0) [0,-1..]        -- South direction
-                , map (flip (,) 0) [0, -1..]  -- West direction
+movesFor Rook = [ map ((,) 0) [1..]           -- North direction
+                , map (flip (,) 0) [1..]      -- East direction
+                , map ((,) 0) [-1,-2..]        -- South direction
+                , map (flip (,) 0) [-1,-2..]  -- West direction
                 ]
-movesFor Bishop = [ zip [0..] [0..]        -- North east direction
-                  , zip [0..] [0, -1..]    -- South east direction
-                  , zip [0,-1..] [0, -1..] -- South west direction
-                  , zip [0,-1..] [0..]     -- North west direction
+movesFor Bishop = [ zip [1..] [1..]        -- North east direction
+                  , zip [1..] [-1, -2..]    -- South east direction
+                  , zip [-1, -2..] [-1, -2..] -- South west direction
+                  , zip [-1, -2..] [1..]     -- North west direction
                   ]
 movesFor Queen = movesFor Rook ++ movesFor Bishop

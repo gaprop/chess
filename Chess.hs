@@ -2,7 +2,6 @@ module Chess where
 import Data.Char
 import Data.Array
 
---data Board = Board [[Cell]] deriving(Show)
 data Board = Board (Array Int (Array Int Cell)) deriving(Show)
 
 type Position = (Int, Int)
@@ -56,7 +55,7 @@ readPiece p
 -- Cell
 showCell :: Cell -> Char
 showCell (Cell (Just p)) = showPiece p
-showCell (Cell Nothing) = ' '
+showCell (Cell Nothing) = '.'
 
 readCell :: Char -> Cell
 readCell ' ' = Cell Nothing
@@ -64,14 +63,15 @@ readCell p = Cell $ Just $ readPiece p
 
 -- Board
 showBoard :: Board -> String
-showBoard (Board b) = unlines $ map showRow $ toList b
-  where toList = arrayList . fmap arrayList
-        showRow = map showCell
+showBoard (Board b) = unlines $ map showRow $ toList2d b
+  where showRow = map showCell
 
 readBoard :: String -> Board
 readBoard b = Board $ toArray2d $ map readRow $ lines b
-  where toArray2d = listArray (0, size) . map (listArray (0, size))
-        readRow = map readCell
+  where readRow = map readCell
+
+prettyPrintBoard board = (unlines $ addRowNums board) ++ ("  " ++ (foldr1 (++) . map show $ [0..size]))
+  where addRowNums = mapi (\i x -> show i ++ " " ++ x) . lines . showBoard
 
 initBoard :: Board
 initBoard = readBoard $ unlines ["rnbqkbnr"
@@ -85,8 +85,22 @@ initBoard = readBoard $ unlines ["rnbqkbnr"
                                 ]
 
 -- Utilities
+mapi :: (Int -> a -> b) -> [a] -> [b]
+mapi f = map (\(i, x) -> f i x) . zip [0..]
+
+takeUntil :: (a -> Bool) -> [a] -> [a]
+takeUntil _ [] = []
+takeUntil p (x:xs)  = x : if p x then takeUntil p xs
+                                 else []
+
 arrayList :: Ix i => Array i e -> [e]
 arrayList = foldr (:) []
+
+toArray2d :: [[e]] -> Array Int (Array Int e)
+toArray2d = listArray (0, size) . map (listArray (0, size))
+
+toList2d :: Array Int (Array Int e) -> [[e]]
+toList2d = arrayList . fmap arrayList
 
 insert2d :: Ix i => Array i (Array i e) -> [((i, i), e)] -> Array i (Array i e)
 insert2d arr elms = foldl insert arr elms
