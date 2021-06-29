@@ -9,4 +9,4 @@ Run
 $ ghc -dynamic Main.hs Chess.hs Control.hs
 ```
 
-You'll need the System.Console.ANSI package however, which I is why I should propably have made this with cabal.
+You'll need the System.Console.ANSI package however.
